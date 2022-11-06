@@ -73,6 +73,25 @@ services:
        - /tmp/spark-apps:/opt/spark-apps
        - /tmp/spark-data:/opt/spark-data
        - /tmp/spark-data:/tmp/spark-data
+  spark-worker-4:
+    image: spark-worker-image
+    container_name: spark-worker-4
+    hostname: spark-worker-4
+    depends_on:
+      - spark-master
+    ports:
+      - "8084:8081"
+    env_file: ./docker/worker/spark-worker-config.sh
+    environment:
+      - "SPARK_LOCAL_IP=spark-worker-4"
+      - "SPARK_PUBLIC_DNS=spark-worker-4"
+    networks: 
+      spark-network:
+        ipv4_address: 10.5.0.6
+    volumes:
+       - /tmp/spark-apps:/opt/spark-apps
+       - /tmp/spark-data:/opt/spark-data
+       - /tmp/spark-data:/tmp/spark-data
   spark-driver:
     image: spark-driver-image
     container_name: spark-driver
@@ -81,7 +100,7 @@ services:
       - spark-master
     networks: 
       spark-network:
-        ipv4_address: 10.5.0.6
+        ipv4_address: 10.5.0.7
     volumes:
        - /tmp/spark-apps:/opt/spark-apps
        - /tmp/spark-data:/opt/spark-data

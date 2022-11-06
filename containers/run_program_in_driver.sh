@@ -1,0 +1,1 @@
+docker exec spark-driver /opt/conda/bin/python $1
