@@ -1,1 +1,1 @@
-docker exec spark-driver /opt/conda/bin/python $1
+docker exec spark-driver python3 -Wignore $1

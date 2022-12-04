@@ -1,13 +1,13 @@
-FROM mesosphere/kubeflow:2.1.0-rc.0-jupyter-spark-3.3.0-horovod-0.24.2-pytorch-1.11.0-gpu
+FROM horovod-spark-pytorch
 
 USER root
 
-RUN pip install fsspec petastorm
-
 # # add these below 2 lines for grouped-allreduce
-# RUN sed -i '183s/dist_optimizer_args/dist_optimizer_args,num_groups=1/' /opt/conda/lib/python3.8/site-packages/horovod/spark/torch/remote.py
+# RUN sed -i '199s/dist_optimizer_args/dist_optimizer_args,num_groups=1/' /usr/local/lib/python3.9/dist-packages/horovod/spark/torch/remote.py
 # ENV HOROVOD_CYCLE_TIME 0.1
 
 ADD . /
 
 WORKDIR /horovod_pytorch
+
+ENTRYPOINT ["tail", "-f", "/dev/null"]

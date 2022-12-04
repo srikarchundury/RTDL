@@ -1,1 +1,1 @@
-docker stats | tee $1
+docker stats

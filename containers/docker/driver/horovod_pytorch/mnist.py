@@ -25,26 +25,42 @@ import horovod.spark.torch as hvd
 from horovod.spark.common.backend import SparkBackend
 from horovod.spark.common.store import Store
 
+num_workers = 5
+num_epochs = 18
+# when equal to num_workers, becomes all-reduce
+num_back_passes = 1
+
 parser = argparse.ArgumentParser(description='PyTorch Spark MNIST Example',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--master', default='spark://spark-master:7077',
                     help='spark master to connect to')
-parser.add_argument('--num-proc', type=int,
+parser.add_argument('--num-proc', type=int, default=num_workers,
                     help='number of worker processes for training, default: `spark.default.parallelism`')
+parser.add_argument('--limit', type=int, default=20000,
+                    help='limit value to data frame to train on smaller datasets')
 parser.add_argument('--batch-size', type=int, default=128,
                     help='input batch size for training')
-parser.add_argument('--epochs', type=int, default=12,
+parser.add_argument('--epochs', type=int, default=num_epochs,
                     help='number of epochs to train')
-parser.add_argument('--work-dir', default='/tmp/spark-data',
+parser.add_argument('--work-dir', default='/opt/spark-data',
                     help='temporary working directory to write intermediate files (prefix with hdfs:// to use HDFS)')
-parser.add_argument('--data-dir', default='/tmp/spark-data',
+parser.add_argument('--data-dir', default='/opt/spark-data',
                     help='location of the training dataset in the local filesystem (will be downloaded if needed)')
+
+
+def round_to_batch_size(df, bs):
+    c = df.count()
+    x = c // bs
+    x = c * bs
+    return df.limit(x)
 
 if __name__ == '__main__':
     args = parser.parse_args()
 
     # Initialize SparkSession
-    conf = SparkConf().setAppName('pytorch_spark_mnist').set('spark.sql.shuffle.partitions', '16')
+    # conf = SparkConf().setAppName('pytorch_spark_mnist').set('spark.sql.shuffle.partitions', '7').set('spark.sql.sources.parallelPartitionDiscovery.threshold', '8').set('spark.sql.sources.parallelPartitionDiscovery.parallelism', '8').set('spark.sql.files.minPartitionNum', '8').set('spark.sql.files.maxPartitionBytes', '128')
+    # conf = SparkConf().setAppName('pytorch_spark_mnist').set('spark.sql.sources.parallelPartitionDiscovery.threshold', 1)
+    conf = SparkConf().setAppName('pytorch_spark_mnist').set('spark.sql.shuffle.partitions', str(args.num_proc))
     if args.master:
         conf.setMaster(args.master)
     elif args.num_proc:
@@ -65,7 +81,9 @@ if __name__ == '__main__':
         .option('numFeatures', '784') \
         .load(libsvm_path)
 
-    # df = df.limit(100)
+    df = df.limit(args.limit)
+ 
+    print("overall count - ", df.count())
 
     # One-hot encode labels into SparseVectors
     encoder = OneHotEncoder(inputCols=['label'],
@@ -76,6 +94,11 @@ if __name__ == '__main__':
 
     # Train/test split
     train_df, test_df = train_df.randomSplit([0.9, 0.1])
+    train_df = train_df.repartition(args.num_proc)
+    test_df = test_df.repartition(args.num_proc)
+    # train_df = round_to_batch_size(train_df, args.batch_size)
+    # test_df = round_to_batch_size(test_df, args.batch_size)
+    # print(train_df.count(), test_df.count())
 
     # Define the PyTorch model without any Horovod-specific parameters
     class Net(nn.Module):
@@ -110,6 +133,7 @@ if __name__ == '__main__':
                                          store=store,
                                          model=model,
                                          optimizer=optimizer,
+                                         backward_passes_per_step = num_back_passes,
                                          loss=lambda input, target: loss(input, target.long()),
                                          input_shapes=[[-1, 1, 28, 28]],
                                          feature_cols=['features'],
